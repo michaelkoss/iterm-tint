@@ -63,10 +63,17 @@ Symlinked directories use the **symlink path as-is** without resolving to the re
   * **Zsh:** `chpwd` hook
   * **Bash:** `PROMPT_COMMAND` or `cd` wrapper
   * **Fish:** `--on-variable PWD` function
-* **iTerm2 Control:** Communication is handled via proprietary escape codes:
-  * **Background:** `\033]6;1;bg;red;brightness;[value]\a`
-  * **Foreground:** `\033]6;1;fg;red;brightness;[value]\a`
+* **iTerm2 Control:** Communication is handled via iTerm2's proprietary RGB escape codes. For each color, you must emit three separate sequences (red, green, blue components, 0–255):
+  * **Background (RGB example):**
+    * `\033]6;1;bg;red;brightness;{R}\a`
+    * `\033]6;1;bg;green;brightness;{G}\a`
+    * `\033]6;1;bg;blue;brightness;{B}\a`
+  * **Foreground (RGB example):**
+    * `\033]6;1;fg;red;brightness;{R}\a`
+    * `\033]6;1;fg;green;brightness;{G}\a`
+    * `\033]6;1;fg;blue;brightness;{B}\a`
 
+  Here `{R}`, `{G}`, and `{B}` are decimal values in the range `0`–`255` derived from the computed HSL color; `brightness` and the channel names (`red`, `green`, `blue`) are literal parts of the iTerm2 escape-code protocol.
 ---
 
 ## 4. Configuration (`~/.itint`)
