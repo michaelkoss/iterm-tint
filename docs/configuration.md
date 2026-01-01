@@ -178,7 +178,7 @@ The `[overrides]` section allows you to set specific colors for specific paths, 
 | Hue only | `~/work 180` | Uses default saturation and lightness |
 | Full HSL | `~/work 180 60 45` | Specifies all three values |
 
-**Note:** Partial values (hue + saturation without lightness) are not supported.
+**Note:** Only hue-only or full HSL formats are supported; partial values (for example, hue + saturation without lightness) are not allowed.
 
 ### Hue Reference
 
