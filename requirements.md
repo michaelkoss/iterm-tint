@@ -25,7 +25,7 @@
 
 The background color is determined by the HSL (Hue, Saturation, Lightness) model to maintain consistent "brightness" regardless of the specific color.
 
-* **Hue (H):** A value between 0 and 360 generated via a **DJB2 hash** of the directory path (mod 360).
+* **Hue (H):** A value between 0 and 360 generated via a **DJB2 hash** of the directory path, using an initial value of `5381` and the update formula `hash = ((hash << 5) + hash) + byte` applied to each byte of the UTF-8–encoded path, then taking `hash mod 360`.
 * **Saturation (S) & Lightness (L):** Static constants pulled from the configuration file to maintain a specific visual "vibe."
   * **Default Saturation:** 50%
   * **Default Lightness:** 50%
