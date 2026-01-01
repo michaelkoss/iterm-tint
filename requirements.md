@@ -189,7 +189,7 @@ The installer will:
 
 ```bash
 git clone https://github.com/[repo].git ~/.iterm-tint
-echo 'source ~/.iterm-tint/iterm-tint.sh' >> ~/.zshrc  # or .bashrc
+echo 'source ~/.iterm-tint/iterm-tint.sh' >> ~/.zshrc  # Zsh example; adapt for .bashrc or config.fish
 ```
 
 ### 5.3 Updating
