@@ -68,7 +68,7 @@ Or simply open a new terminal tab.
 If a specific path has an unexpected color, check for overrides in `~/.itint`:
 
 ```bash
-cat ~/.itint | grep -A 20 "\[overrides\]"
+grep -A 20 "\[overrides\]" ~/.itint
 ```
 
 Remember: the most specific (longest matching prefix) override wins.
