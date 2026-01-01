@@ -100,7 +100,7 @@ The configuration file is located at `~/.itint`. It uses a **shell-sourceable fo
 
 ```bash
 # iterm-tint configuration
-# See: https://github.com/[repo]/docs/CONFIGURATION.md
+# See: https://github.com/michaelkoss/iterm-tint/docs/CONFIGURATION.md
 
 # Color settings (0-100)
 ITINT_DEFAULT_SATURATION=50
@@ -176,7 +176,7 @@ If the config file contains syntax errors or invalid values:
 ### 5.1 Recommended: Curl Installer
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/[repo]/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/michaelkoss/iterm-tint/main/install.sh | sh
 ```
 
 The installer will:
@@ -188,7 +188,7 @@ The installer will:
 ### 5.2 Manual Installation
 
 ```bash
-git clone https://github.com/[repo].git ~/.iterm-tint
+git clone https://github.com/michaelkoss/iterm-tint.git ~/.iterm-tint
 echo 'source ~/.iterm-tint/iterm-tint.sh' >> ~/.zshrc  # Zsh example; adapt for .bashrc or config.fish
 ```
 
