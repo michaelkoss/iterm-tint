@@ -65,8 +65,8 @@ iterm-tint uses the DJB2 hash algorithm to generate a consistent numeric hash fr
 
 ```
 Initial value: 5381
-For each byte in the UTF-8 encoded path:
-    hash = ((hash << 5) + hash) + byte
+For each byte value in the UTF-8 encoded path string:
+    hash = ((hash << 5) + hash) + byteValue
 
 Final hue = hash mod 360
 ```
