@@ -14,7 +14,7 @@ A shell-integrated utility for macOS iTerm2 that dynamically changes tab colors 
 ## Quick Start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/[repo]/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/michaelkoss/iterm-tint/main/install.sh | sh
 ```
 
 ## Installation
@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/[repo]/main/install.sh | sh
 ### Option 1: Curl Installer (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/[repo]/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/michaelkoss/iterm-tint/main/install.sh | sh
 ```
 
 The installer will:
@@ -33,7 +33,7 @@ The installer will:
 ### Option 2: Manual Installation
 
 ```bash
-git clone https://github.com/[repo].git ~/.iterm-tint
+git clone https://github.com/michaelkoss/iterm-tint.git ~/.iterm-tint
 ```
 
 Then add to your shell configuration:
