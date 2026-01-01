@@ -84,8 +84,8 @@ The configuration file is located at `~/.itint`. It uses a **shell-sourceable fo
 
 | Setting | Description | Default |
 | --- | --- | --- |
-| **`ITINT_DEFAULT_SATURATION`** | Global saturation percentage (0-100) for active tabs. | `50` |
-| **`ITINT_DEFAULT_LIGHTNESS`** | Global lightness percentage (0-100) for active tabs. | `50` |
+| **`ITINT_DEFAULT_SATURATION`** | Global saturation percentage from 0 to 100 (no `%` sign) for active tabs. | `50` |
+| **`ITINT_DEFAULT_LIGHTNESS`** | Global lightness percentage from 0 to 100 (no `%` sign) for active tabs. | `50` |
 | **`ITINT_DIM_MULTIPLIER`** | Factor by which S and L are reduced for inactive tabs. *(Future)* | `0.5` |
 | **`ITINT_HASH_MODE`** | Choose between `absolute_path` or `folder_name_only`. | `absolute_path` |
 | **`ITINT_FOCUS_MODE`** | Toggle between `active_focus` or `primary_pane`. | `active_focus` |
