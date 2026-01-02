@@ -20,18 +20,37 @@ _itint_clamp_percent() {
     fi
 }
 
+# Capture initial environment values before any config loading (preserves user overrides)
+# These are captured once on script load and used as base defaults on every config reload
+: "${_ITINT_ENV_SATURATION:=${ITINT_DEFAULT_SATURATION:-50}}"
+: "${_ITINT_ENV_LIGHTNESS:=${ITINT_DEFAULT_LIGHTNESS:-50}}"
+: "${_ITINT_ENV_HASH_MODE:=${ITINT_HASH_MODE:-absolute_path}}"
+: "${_ITINT_ENV_SUBMODULE_MODE:=${ITINT_SUBMODULE_MODE:-parent}}"
+
+# Track config file mtime to avoid unnecessary reloads
+_ITINT_CONFIG_MTIME=""
+
 # Load configuration from ~/.itint
 # Parses the config file safely without eval and sets defaults for any missing settings
 # Also parses the [overrides] section for path-specific color overrides
 _itint_load_config() {
     local config_file="$HOME/.itint"
 
-    # Set defaults first (these are used if config is missing or has errors)
-    : "${ITINT_DEFAULT_SATURATION:=50}"
-    : "${ITINT_DEFAULT_LIGHTNESS:=50}"
-    : "${ITINT_HASH_MODE:=absolute_path}"
+    # Check if config file has changed (mtime-based caching)
+    local mtime
+    mtime=$(stat -f %m "$config_file" 2>/dev/null || echo 0)
+    if [[ "$mtime" == "$_ITINT_CONFIG_MTIME" ]]; then
+        return  # Config unchanged, skip reload
+    fi
+    _ITINT_CONFIG_MTIME=$mtime
+
+    # Reset to base defaults (preserves environment variable overrides)
+    # Uses captured environment values, falling back to hardcoded defaults
+    ITINT_DEFAULT_SATURATION=$_ITINT_ENV_SATURATION
+    ITINT_DEFAULT_LIGHTNESS=$_ITINT_ENV_LIGHTNESS
+    ITINT_HASH_MODE=$_ITINT_ENV_HASH_MODE
     # ITINT_FOCUS_MODE is reserved for future use (primary_pane support not yet implemented)
-    : "${ITINT_SUBMODULE_MODE:=parent}"
+    ITINT_SUBMODULE_MODE=$_ITINT_ENV_SUBMODULE_MODE
 
     # Clear any existing overrides
     _ITINT_OVERRIDES=""
@@ -538,6 +557,9 @@ _itint_find_git_root() {
 _itint_update() {
     local hue saturation lightness
     local override
+
+    # Reload configuration on every update to pick up changes immediately
+    _itint_load_config
 
     # Check for path override first (highest priority)
     # Overrides match against the current directory, not git root

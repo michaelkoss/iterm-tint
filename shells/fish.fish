@@ -4,11 +4,21 @@
 #
 # https://github.com/michaelkoss/iterm-tint
 
-# Configuration defaults
+# Capture initial environment values before any config loading (preserves user overrides)
+# These are captured once on script load and used as base defaults on every config reload
 set -q ITINT_DEFAULT_SATURATION; or set -g ITINT_DEFAULT_SATURATION 50
 set -q ITINT_DEFAULT_LIGHTNESS; or set -g ITINT_DEFAULT_LIGHTNESS 50
 set -q ITINT_HASH_MODE; or set -g ITINT_HASH_MODE absolute_path
 set -q ITINT_SUBMODULE_MODE; or set -g ITINT_SUBMODULE_MODE parent
+
+# Store captured environment values as base defaults
+set -g _ITINT_ENV_SATURATION $ITINT_DEFAULT_SATURATION
+set -g _ITINT_ENV_LIGHTNESS $ITINT_DEFAULT_LIGHTNESS
+set -g _ITINT_ENV_HASH_MODE $ITINT_HASH_MODE
+set -g _ITINT_ENV_SUBMODULE_MODE $ITINT_SUBMODULE_MODE
+
+# Track config file mtime to avoid unnecessary reloads
+set -g _ITINT_CONFIG_MTIME ""
 
 # Path overrides storage (list of "path|hue|sat|light" entries)
 set -g _ITINT_OVERRIDES
@@ -142,11 +152,22 @@ end
 function _itint_load_config
     set -l config_file "$HOME/.itint"
 
-    # Set defaults only if not already set from environment
-    set -q ITINT_DEFAULT_SATURATION; or set -g ITINT_DEFAULT_SATURATION 50
-    set -q ITINT_DEFAULT_LIGHTNESS; or set -g ITINT_DEFAULT_LIGHTNESS 50
-    set -q ITINT_HASH_MODE; or set -g ITINT_HASH_MODE absolute_path
-    set -q ITINT_SUBMODULE_MODE; or set -g ITINT_SUBMODULE_MODE parent
+    # Check if config file has changed (mtime-based caching)
+    set -l mtime 0
+    if test -f "$config_file"
+        set mtime (stat -f %m "$config_file" 2>/dev/null; or echo 0)
+    end
+    if test "$mtime" = "$_ITINT_CONFIG_MTIME"
+        return  # Config unchanged, skip reload
+    end
+    set -g _ITINT_CONFIG_MTIME $mtime
+
+    # Reset to base defaults (preserves environment variable overrides)
+    # Uses captured environment values, falling back to hardcoded defaults
+    set -g ITINT_DEFAULT_SATURATION $_ITINT_ENV_SATURATION
+    set -g ITINT_DEFAULT_LIGHTNESS $_ITINT_ENV_LIGHTNESS
+    set -g ITINT_HASH_MODE $_ITINT_ENV_HASH_MODE
+    set -g ITINT_SUBMODULE_MODE $_ITINT_ENV_SUBMODULE_MODE
 
     # Clear any existing overrides
     set -g _ITINT_OVERRIDES
@@ -411,6 +432,9 @@ end
 function _itint_update --on-variable PWD
     # Guard against empty PWD
     test -z "$PWD"; and return
+
+    # Reload configuration on every update to pick up changes immediately
+    _itint_load_config
 
     set -l hue
     set -l saturation

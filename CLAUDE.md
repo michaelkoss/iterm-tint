@@ -44,3 +44,9 @@ Project learnings and patterns for LLM-assisted development.
 - **Test for TTY with `[ -t 1 ]`** before outputting colors
 - **Use `command -v foo`** instead of `which foo` - POSIX compliant
 - **`set -e`** for fail-fast behavior in installers
+
+### Configuration Reload Patterns
+
+- **Reload config on every hook invocation** for immediate user feedback on config changes
+- **Trade-off**: slightly more file I/O vs requiring shell restart for config changes
+- **User expectation**: config changes should "just work" without manual reload steps
