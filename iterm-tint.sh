@@ -189,3 +189,26 @@ _itint_update() {
     # shellcheck disable=SC2086
     _itint_set_tab_color $rgb
 }
+
+# Bash-specific: wrapper for PROMPT_COMMAND that only updates on directory change
+_itint_prompt_command() {
+    if [ "$PWD" != "$_ITINT_LAST_DIR" ]; then
+        _itint_update
+        _ITINT_LAST_DIR="$PWD"
+    fi
+}
+
+# Register shell hooks based on current shell
+# Zsh: uses chpwd hook (fires on directory change)
+# Bash: uses PROMPT_COMMAND (fires before each prompt, so we track last dir)
+if [ -n "$ZSH_VERSION" ]; then
+    # Zsh - add to chpwd hook array
+    chpwd_functions+=(_itint_update)
+elif [ -n "$BASH_VERSION" ]; then
+    # Bash - prepend to PROMPT_COMMAND, preserving existing commands
+    PROMPT_COMMAND="_itint_prompt_command${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+    _ITINT_LAST_DIR=""
+fi
+
+# Set initial tab color for current directory on shell startup
+_itint_update
