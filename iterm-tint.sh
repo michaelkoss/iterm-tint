@@ -2,6 +2,100 @@
 # iterm-tint - Dynamic iTerm2 tab colors based on working directory
 # https://github.com/michaelkoss/iterm-tint
 
+# Clamp a percentage value to 0-100, returning default if non-numeric
+# Usage: result=$(_itint_clamp_percent "$value" "$default")
+_itint_clamp_percent() {
+    local value="$1"
+    local default="$2"
+    if ! [ "$value" -eq "$value" ] 2>/dev/null; then
+        echo "$default"
+        return
+    fi
+    if [ "$value" -lt 0 ]; then
+        echo 0
+    elif [ "$value" -gt 100 ]; then
+        echo 100
+    else
+        echo "$value"
+    fi
+}
+
+# Load configuration from ~/.itint
+# Parses the config file safely without eval and sets defaults for any missing settings
+_itint_load_config() {
+    local config_file="$HOME/.itint"
+
+    # Set defaults first (these are used if config is missing or has errors)
+    : "${ITINT_DEFAULT_SATURATION:=50}"
+    : "${ITINT_DEFAULT_LIGHTNESS:=50}"
+    : "${ITINT_HASH_MODE:=absolute_path}"
+    # ITINT_FOCUS_MODE is reserved for future use (primary_pane support not yet implemented)
+    : "${ITINT_SUBMODULE_MODE:=parent}"
+
+    # Parse config file if it exists (safely, without eval)
+    if [ -f "$config_file" ]; then
+        local line key value
+        while IFS= read -r line; do
+            # Split on first equals sign only (preserves values containing '=')
+            key="${line%%=*}"
+            value="${line#*=}"
+            # Skip empty lines or lines that don't match our pattern
+            [ -z "$key" ] && continue
+            # Validate key format (must be ITINT_ followed by uppercase letters/underscores)
+            case "$key" in
+                ITINT_[A-Z_]*) ;;
+                *) continue ;;
+            esac
+            # Strip matching pairs of quotes from value if present
+            case "$value" in
+                \"*\") value="${value#\"}"; value="${value%\"}" ;;
+                \'*\') value="${value#\'}"; value="${value%\'}" ;;
+            esac
+            # Validate and set known configuration variables
+            case "$key" in
+                ITINT_DEFAULT_SATURATION|ITINT_DEFAULT_LIGHTNESS)
+                    # Only accept numeric values
+                    if [ "$value" -eq "$value" ] 2>/dev/null; then
+                        export "$key=$value"
+                    fi
+                    ;;
+                ITINT_HASH_MODE)
+                    # Only accept known modes
+                    case "$value" in
+                        absolute_path|folder_name_only)
+                            export "$key=$value"
+                            ;;
+                    esac
+                    ;;
+                ITINT_SUBMODULE_MODE)
+                    # Only accept known modes
+                    case "$value" in
+                        parent|unique)
+                            export "$key=$value"
+                            ;;
+                    esac
+                    ;;
+            esac
+        done < <(grep -E '^ITINT_[A-Z_]+=' "$config_file" 2>/dev/null | head -20)
+    fi
+
+    # Validate and clamp saturation/lightness (0-100)
+    ITINT_DEFAULT_SATURATION=$(_itint_clamp_percent "$ITINT_DEFAULT_SATURATION" 50)
+    ITINT_DEFAULT_LIGHTNESS=$(_itint_clamp_percent "$ITINT_DEFAULT_LIGHTNESS" 50)
+
+    # Validate hash mode
+    case "$ITINT_HASH_MODE" in
+        absolute_path|folder_name_only) ;;
+        *) ITINT_HASH_MODE=absolute_path ;;
+    esac
+
+    # Validate submodule mode
+    case "$ITINT_SUBMODULE_MODE" in
+        parent|unique) ;;
+        *) ITINT_SUBMODULE_MODE=parent ;;
+    esac
+}
+
 # DJB2 hash algorithm - converts a string to a hue value (0-360)
 # Algorithm: hash = ((hash << 5) + hash) + byte for each byte
 # Initial value: 5381
@@ -119,6 +213,7 @@ _itint_set_tab_color() {
 # Input: starting directory path
 # Output: git root path (empty string if not in a git repo)
 # Stops at ~ or / to prevent runaway searches
+# Respects ITINT_SUBMODULE_MODE: 'unique' returns submodule root, 'parent' continues to parent repo
 _itint_find_git_root() {
     local dir="$1"
     local home_dir="$HOME"
@@ -129,17 +224,42 @@ _itint_find_git_root() {
         prev_dir="$dir"
         # Check for .git in current directory
         if [ -e "$dir/.git" ]; then
-            # Found something - is it a directory (regular repo) or file (submodule)?
+            # Found something - is it a directory (regular repo) or file (submodule/worktree)?
             if [ -d "$dir/.git" ]; then
                 # Regular git repository
                 echo "$dir"
                 return 0
             else
-                # .git is a file - this is a submodule
-                # For now, treat it as the git root (ITINT_SUBMODULE_MODE=unique behavior)
-                # TODO: Add ITINT_SUBMODULE_MODE=parent support to continue upward
-                echo "$dir"
-                return 0
+                # .git is a file - could be submodule or worktree
+                # Worktrees have: gitdir: /path/to/.git/worktrees/<name>
+                # Submodules have: gitdir: ../.git/modules/<name>
+                local gitdir_line
+                gitdir_line=$(head -1 "$dir/.git" 2>/dev/null)
+                # Check for worktree pattern using case for shell compatibility
+                case "$gitdir_line" in
+                    *"/worktrees/"*)
+                        # This is a worktree - treat it as a real repo root
+                        echo "$dir"
+                        return 0
+                        ;;
+                esac
+                # Check if it's a submodule (points to .git/modules/) vs separate-git-dir
+                case "$gitdir_line" in
+                    *"/.git/modules/"*)
+                        # This is a submodule
+                        if [ "$ITINT_SUBMODULE_MODE" = "unique" ]; then
+                            # Return submodule root for unique color
+                            echo "$dir"
+                            return 0
+                        fi
+                        # For 'parent' mode, continue searching upward for real repo
+                        ;;
+                    *)
+                        # Not a submodule (e.g., git --separate-git-dir) - treat as repo root
+                        echo "$dir"
+                        return 0
+                        ;;
+                esac
             fi
         fi
 
@@ -176,6 +296,13 @@ _itint_update() {
         hash_path="$PWD"
     fi
 
+    # Apply hash mode: folder_name_only uses just the folder name, not full path
+    if [ "$ITINT_HASH_MODE" = "folder_name_only" ]; then
+        hash_path="${hash_path##*/}"
+        # Handle edge case where path is "/" (results in empty string)
+        [ -z "$hash_path" ] && hash_path="/"
+    fi
+
     # Generate hue from path
     local hue
     hue=$(_itint_path_to_hue "$hash_path")
@@ -185,9 +312,9 @@ _itint_update() {
         return 1
     fi
 
-    # Use default saturation and lightness (config parsing comes later)
-    local saturation=50
-    local lightness=50
+    # Use saturation and lightness from configuration
+    local saturation="${ITINT_DEFAULT_SATURATION:-50}"
+    local lightness="${ITINT_DEFAULT_LIGHTNESS:-50}"
 
     # Convert to RGB
     local rgb
@@ -214,6 +341,9 @@ _itint_prompt_command() {
 # Guard against duplicate sourcing
 if [ -z "$_ITINT_INITIALIZED" ]; then
     _ITINT_INITIALIZED=1
+
+    # Load configuration from ~/.itint
+    _itint_load_config
 
     # Register shell hooks based on current shell
     # Zsh: uses chpwd hook (fires on directory change)
