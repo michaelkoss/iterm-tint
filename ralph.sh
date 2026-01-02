@@ -25,7 +25,12 @@ for ((i=1; i<=MAX_ITERATIONS; i++)); do
   echo "─────────────────────────────────────────────────────────"
 
   # Run claude with the prompt
-  fs run ralph --name "ralph_$(date +%y%m%d%H%M%S)" --clean-on-end
+  if ! fs run ralph --name "ralph_$(date +%y%m%d%H%M%S)" --clean-on-end; then
+    echo ""
+    echo "✗ ERROR: fs run failed on iteration $i"
+    echo "Stopping all iterations."
+    exit 1
+  fi
 
   ITERATION_END=$(date +%s)
   ITERATION_DURATION=$((ITERATION_END - ITERATION_START))
