@@ -194,10 +194,17 @@ _itint_hsl_to_rgb() {
 }
 
 # Set iTerm2 tab color using escape codes
-# Input: R G B (0-255 each)
+# Input: R G B lightness (0-255 for RGB, 0-100 for lightness)
 # Only outputs escape codes if running in iTerm2
+# Sets both background and foreground (text) color for optimal contrast
 _itint_set_tab_color() {
     local r="$1" g="$2" b="$3"
+    # Default to 50 if lightness not provided (backwards compatibility)
+    local lightness="${4:-50}"
+    # Validate lightness is numeric; default to 50 if not
+    if ! [[ "$lightness" =~ ^[0-9]+$ ]]; then
+        lightness=50
+    fi
 
     # Silently do nothing if not in iTerm2 or not a TTY
     [ "$TERM_PROGRAM" != "iTerm.app" ] && return 0
@@ -207,6 +214,18 @@ _itint_set_tab_color() {
     printf '\033]6;1;bg;red;brightness;%d\a' "$r"
     printf '\033]6;1;bg;green;brightness;%d\a' "$g"
     printf '\033]6;1;bg;blue;brightness;%d\a' "$b"
+
+    # Set foreground (text) color based on lightness for contrast
+    # L >= 55%: black text, L < 55%: white text
+    local fg_val
+    if [ "$lightness" -ge 55 ]; then
+        fg_val=0    # Black
+    else
+        fg_val=255  # White
+    fi
+    printf '\033]6;1;fg;red;brightness;%d\a' "$fg_val"
+    printf '\033]6;1;fg;green;brightness;%d\a' "$fg_val"
+    printf '\033]6;1;fg;blue;brightness;%d\a' "$fg_val"
 }
 
 # Find git root directory by searching upward
@@ -325,9 +344,9 @@ _itint_update() {
         return 1
     fi
 
-    # Set tab color
+    # Set tab color (pass lightness for foreground contrast calculation)
     # shellcheck disable=SC2086
-    _itint_set_tab_color $rgb
+    _itint_set_tab_color $rgb "$lightness"
 }
 
 # Bash-specific: wrapper for PROMPT_COMMAND that only updates on directory change
