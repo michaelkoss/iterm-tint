@@ -155,3 +155,37 @@ _itint_find_git_root() {
     echo ""
     return 1
 }
+
+# Main update function - determines color for current directory and sets tab color
+# Called by shell hooks on directory change
+_itint_update() {
+    # Determine what path to hash
+    local hash_path
+    local git_root
+
+    git_root=$(_itint_find_git_root "$PWD")
+
+    if [ -n "$git_root" ]; then
+        # Inside a git repo - use git root for hashing
+        hash_path="$git_root"
+    else
+        # Not in git - use current directory
+        hash_path="$PWD"
+    fi
+
+    # Generate hue from path
+    local hue
+    hue=$(_itint_path_to_hue "$hash_path")
+
+    # Use default saturation and lightness (config parsing comes later)
+    local saturation=50
+    local lightness=50
+
+    # Convert to RGB
+    local rgb
+    rgb=$(_itint_hsl_to_rgb "$hue" "$saturation" "$lightness")
+
+    # Set tab color
+    # shellcheck disable=SC2086
+    _itint_set_tab_color $rgb
+}
