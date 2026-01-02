@@ -1,7 +1,9 @@
 # Ralph Wiggum Loop - Documentation Driven Development
 
-## Strategic Goal: Build From Documentation
-This project follows Documentation Driven Design. The documentation is the spec - implement what it describes. Read all docs first, then build incrementally.
+## Strategic Goal: MVP First, Then Enhance
+This project follows Documentation Driven Design. The documentation is the spec - but **prioritize getting to a working end-to-end experience first**. The user wants to see their iTerm tabs actually changing color based on their directory.
+
+**MVP = tab colors change when you cd between directories.** Everything else (config files, foreground color, submodule handling) is enhancement. Get to MVP fast.
 
 ## This Loop: ONE SMALLEST TESTABLE UNIT ONLY
 Build ONE independently testable piece. Err on the side of too small. Examples:
@@ -10,6 +12,8 @@ Build ONE independently testable piece. Err on the side of too small. Examples:
 - A single config feature (e.g., "parse saturation from ~/.itint")
 
 Do NOT combine multiple features. One testable unit = one loop.
+
+**BUT: Prioritize units on the critical path to MVP.** Ask yourself: "Does this get the user closer to seeing their tabs change color?" If not, it can wait.
 
 ## Context
 - **Documentation** (read-only, cannot modify):
@@ -27,7 +31,8 @@ Do NOT combine multiple features. One testable unit = one loop.
 2. **Check Progress** - Use `git log` to see what's been implemented (read full commit messages - important context is in descriptions)
 3. **Plan** - Identify the ONE smallest testable unit that logically comes next:
    - What does "done" look like? How will you test it?
-   - Why is this the right next step?
+   - **Is this on the critical path to MVP?** (If not, deprioritize it)
+   - What's blocking the user from testing this in their actual iTerm?
 4. **Implement** - Build it completely (no placeholders) - proceed without asking for confirmation
 5. **Test** - Verify it works (source the script, run a command, check output)
 6. **Document** - Update CLAUDE.md with learnings/patterns (not a changelog - git handles that)
@@ -41,4 +46,4 @@ Do NOT combine multiple features. One testable unit = one loop.
 
 ---
 
-IMPORTANT: Documentation is read-only. Think hard. Don't implement placeholders. One small thing per loop.
+IMPORTANT: Documentation is read-only. Think hard. Don't implement placeholders. One small thing per loop. **Get to MVP fast - the user wants to see their tabs change color!**

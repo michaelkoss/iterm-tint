@@ -22,6 +22,7 @@ _itint_clamp_percent() {
 
 # Load configuration from ~/.itint
 # Parses the config file safely without eval and sets defaults for any missing settings
+# Also parses the [overrides] section for path-specific color overrides
 _itint_load_config() {
     local config_file="$HOME/.itint"
 
@@ -32,51 +33,86 @@ _itint_load_config() {
     # ITINT_FOCUS_MODE is reserved for future use (primary_pane support not yet implemented)
     : "${ITINT_SUBMODULE_MODE:=parent}"
 
+    # Clear any existing overrides
+    _ITINT_OVERRIDES=""
+
     # Parse config file if it exists (safely, without eval)
     if [ -f "$config_file" ]; then
         local line key value
-        while IFS= read -r line; do
-            # Split on first equals sign only (preserves values containing '=')
-            key="${line%%=*}"
-            value="${line#*=}"
-            # Skip empty lines or lines that don't match our pattern
-            [ -z "$key" ] && continue
-            # Validate key format (must be ITINT_ followed by uppercase letters/underscores)
-            case "$key" in
-                ITINT_[A-Z_]*) ;;
-                *) continue ;;
-            esac
-            # Strip matching pairs of quotes from value if present
-            case "$value" in
-                \"*\") value="${value#\"}"; value="${value%\"}" ;;
-                \'*\') value="${value#\'}"; value="${value%\'}" ;;
-            esac
-            # Validate and set known configuration variables
-            case "$key" in
-                ITINT_DEFAULT_SATURATION|ITINT_DEFAULT_LIGHTNESS)
-                    # Only accept numeric values
-                    if [ "$value" -eq "$value" ] 2>/dev/null; then
-                        export "$key=$value"
-                    fi
+        local in_overrides=0
+        local line_count=0
+        local max_lines=200  # Safety limit to prevent DoS from large files
+
+        while IFS= read -r line || [ -n "$line" ]; do
+            # Safety limit on number of lines processed
+            line_count=$((line_count + 1))
+            [ "$line_count" -gt "$max_lines" ] && break
+            # Check for [overrides] section header (exact match only)
+            case "$line" in
+                "[overrides]")
+                    in_overrides=1
+                    continue
                     ;;
-                ITINT_HASH_MODE)
-                    # Only accept known modes
-                    case "$value" in
-                        absolute_path|folder_name_only)
+                "["*"]"*)
+                    # Another section started, stop parsing overrides
+                    in_overrides=0
+                    continue
+                    ;;
+            esac
+
+            # Skip comments and empty lines
+            case "$line" in
+                "#"*|"") continue ;;
+            esac
+
+            if [ "$in_overrides" -eq 1 ]; then
+                # Parse override line: <path> <hue> [saturation lightness]
+                _itint_parse_override_line "$line"
+            else
+                # Parse ITINT_ variable assignment
+                # Split on first equals sign only (preserves values containing '=')
+                key="${line%%=*}"
+                value="${line#*=}"
+                # Skip lines that don't match assignment pattern
+                [ "$key" = "$line" ] && continue
+                [ -z "$key" ] && continue
+                # Validate key format (must be ITINT_ followed by uppercase letters/underscores)
+                case "$key" in
+                    ITINT_[A-Z_]*) ;;
+                    *) continue ;;
+                esac
+                # Strip matching pairs of quotes from value if present
+                case "$value" in
+                    \"*\") value="${value#\"}"; value="${value%\"}" ;;
+                    \'*\') value="${value#\'}"; value="${value%\'}" ;;
+                esac
+                # Validate and set known configuration variables
+                case "$key" in
+                    ITINT_DEFAULT_SATURATION|ITINT_DEFAULT_LIGHTNESS)
+                        # Only accept numeric values
+                        if [ "$value" -eq "$value" ] 2>/dev/null; then
                             export "$key=$value"
-                            ;;
-                    esac
-                    ;;
-                ITINT_SUBMODULE_MODE)
-                    # Only accept known modes
-                    case "$value" in
-                        parent|unique)
-                            export "$key=$value"
-                            ;;
-                    esac
-                    ;;
-            esac
-        done < <(grep -E '^ITINT_[A-Z_]+=' "$config_file" 2>/dev/null | head -20)
+                        fi
+                        ;;
+                    ITINT_HASH_MODE)
+                        # Only accept known modes
+                        case "$value" in
+                            absolute_path|folder_name_only)
+                                export "$key=$value"
+                                ;;
+                        esac
+                        ;;
+                    ITINT_SUBMODULE_MODE)
+                        # Only accept known modes
+                        case "$value" in
+                            parent|unique)
+                                export "$key=$value"
+                                ;;
+                        esac
+                        ;;
+                esac
+            fi
+        done < "$config_file"
     fi
 
     # Validate and clamp saturation/lightness (0-100)
@@ -94,6 +130,205 @@ _itint_load_config() {
         parent|unique) ;;
         *) ITINT_SUBMODULE_MODE=parent ;;
     esac
+}
+
+# Parse a single override line and add to _ITINT_OVERRIDES
+# Format: <path> <hue> [saturation lightness]
+# Stores as: path|hue|sat|light (newline-separated entries)
+# Supports paths with spaces by parsing numeric values from the end
+#
+# Limitations:
+# - Paths with multiple consecutive spaces are not supported (spaces collapse)
+# - HSL values must be provided as either hue-only OR all three (hue sat light),
+#   never just two. Two trailing numbers is ambiguous and treated as hue-only.
+_itint_parse_override_line() {
+    local line="$1"
+    local override_path hue sat light
+    local words word_count
+
+    # Skip empty lines and comments
+    case "$line" in
+        ""|\#*) return ;;
+    esac
+
+    # Parse from the end: last 1-3 fields may be hue/sat/light (numeric)
+    # This allows paths with spaces like "~/My Projects 120 50 50"
+    # Strategy: split into array, check last fields for numeric values
+
+    # Use read -a (bash) or read -A (zsh) to split into array
+    # Initialize array first to ensure clean state
+    words=()
+    # shellcheck disable=SC2162
+    if [ -n "$ZSH_VERSION" ]; then
+        words=("${(@s: :)line}")
+    else
+        read -r -a words <<< "$line"
+    fi
+    word_count=${#words[@]}
+
+    # Need at least 2 words (path and hue)
+    [ "$word_count" -lt 2 ] && return
+
+    # Check last 3 words for numeric pattern: hue [sat light]
+    # Note: zsh arrays are 1-based, bash arrays are 0-based
+    local last1 last2 last3
+    if [ -n "$ZSH_VERSION" ]; then
+        last1="${words[$word_count]}"
+        last2="${words[$((word_count - 1))]}"
+        [ "$word_count" -ge 3 ] && last3="${words[$((word_count - 2))]}"
+    else
+        last1="${words[$((word_count - 1))]}"
+        last2="${words[$((word_count - 2))]}"
+        [ "$word_count" -ge 3 ] && last3="${words[$((word_count - 3))]}"
+    fi
+
+    # Determine how many trailing numeric values we have
+    local num_count=0
+    if [ "$last1" -eq "$last1" ] 2>/dev/null; then
+        num_count=1
+        if [ "$last2" -eq "$last2" ] 2>/dev/null; then
+            num_count=2
+            if [ "$word_count" -ge 3 ] && [ "$last3" -eq "$last3" ] 2>/dev/null; then
+                num_count=3
+            fi
+        fi
+    fi
+
+    # Must have at least 1 numeric (hue)
+    [ "$num_count" -eq 0 ] && return
+
+    # Extract values based on count
+    # num_count=1: hue only
+    # num_count=2: could be "path hue" with 2-word path, or invalid (need 1 or 3 nums)
+    # num_count=3: hue sat light
+    #
+    # Helper function to reconstruct path from array elements
+    # This handles paths with multiple spaces correctly
+    local path_end_idx idx
+    local path_words=()
+
+    case "$num_count" in
+        1)
+            hue="$last1"
+            sat=""
+            light=""
+            # Path is words[0..word_count-2] (bash) or words[1..word_count-1] (zsh)
+            path_end_idx=$((word_count - 1))
+            ;;
+        3)
+            hue="$last3"
+            sat="$last2"
+            light="$last1"
+            # Path is words[0..word_count-4] (bash) or words[1..word_count-3] (zsh)
+            path_end_idx=$((word_count - 3))
+            ;;
+        *)
+            # 2 trailing numbers is ambiguous - treat as hue-only with numeric path component
+            # (e.g., "~/project2 120" where "project2" isn't the hue)
+            hue="$last1"
+            sat=""
+            light=""
+            path_end_idx=$((word_count - 1))
+            ;;
+    esac
+
+    # Reconstruct path from array (handles paths with spaces correctly)
+    if [ -n "$ZSH_VERSION" ]; then
+        # zsh: 1-based indexing
+        for ((idx=1; idx<=path_end_idx; idx++)); do
+            path_words+=("${words[$idx]}")
+        done
+    else
+        # bash: 0-based indexing
+        for ((idx=0; idx<path_end_idx; idx++)); do
+            path_words+=("${words[$idx]}")
+        done
+    fi
+    override_path="${path_words[*]}"
+
+    # Must have at least path and hue
+    [ -z "$override_path" ] && return
+    [ -z "$hue" ] && return
+
+    # Validate hue is numeric (0-360)
+    if ! [ "$hue" -eq "$hue" ] 2>/dev/null; then
+        return
+    fi
+    if [ "$hue" -lt 0 ] || [ "$hue" -gt 360 ]; then
+        return
+    fi
+
+    # Expand tilde to home directory
+    case "$override_path" in
+        "~"/*) override_path="$HOME${override_path#\~}" ;;
+        "~") override_path="$HOME" ;;
+    esac
+
+    # Handle saturation and lightness
+    # Must have both or neither (hue-only or full HSL)
+    if [ -n "$sat" ] && [ -n "$light" ]; then
+        # Validate both are numeric
+        if ! [ "$sat" -eq "$sat" ] 2>/dev/null || ! [ "$light" -eq "$light" ] 2>/dev/null; then
+            # Invalid, use defaults
+            sat=""
+            light=""
+        else
+            # Clamp to valid range
+            [ "$sat" -lt 0 ] && sat=0
+            [ "$sat" -gt 100 ] && sat=100
+            [ "$light" -lt 0 ] && light=0
+            [ "$light" -gt 100 ] && light=100
+        fi
+    else
+        # Partial HSL not supported, clear both
+        sat=""
+        light=""
+    fi
+
+    # Append to overrides (format: path|hue|sat|light)
+    # Empty sat/light means use defaults
+    if [ -n "$_ITINT_OVERRIDES" ]; then
+        _ITINT_OVERRIDES="${_ITINT_OVERRIDES}
+${override_path}|${hue}|${sat}|${light}"
+    else
+        _ITINT_OVERRIDES="${override_path}|${hue}|${sat}|${light}"
+    fi
+}
+
+# Find the best matching override for a given path
+# Returns: "hue|sat|light" or empty string if no match
+# Uses longest prefix match (most specific path wins)
+_itint_find_override() {
+    local target_path="$1"
+    local best_match=""
+    local best_len=0
+
+    [ -z "$_ITINT_OVERRIDES" ] && return
+
+    # Iterate through overrides
+    local override_entry override_path hue sat light path_len
+
+    # Process each line
+    while IFS= read -r override_entry; do
+        [ -z "$override_entry" ] && continue
+
+        # Parse: path|hue|sat|light
+        IFS='|' read -r override_path hue sat light <<< "$override_entry"
+
+        # Check if target_path starts with override_path (prefix match)
+        case "$target_path" in
+            "$override_path"|"$override_path"/*)
+                # Calculate path length for "most specific wins"
+                path_len=${#override_path}
+                if [ "$path_len" -gt "$best_len" ]; then
+                    best_len="$path_len"
+                    best_match="$hue|$sat|$light"
+                fi
+                ;;
+        esac
+    done <<< "$_ITINT_OVERRIDES"
+
+    echo "$best_match"
 }
 
 # DJB2 hash algorithm - converts a string to a hue value (0-360)
@@ -301,42 +536,59 @@ _itint_find_git_root() {
 # Main update function - determines color for current directory and sets tab color
 # Called by shell hooks on directory change
 _itint_update() {
-    # Determine what path to hash
-    local hash_path
-    local git_root
+    local hue saturation lightness
+    local override
 
-    git_root=$(_itint_find_git_root "$PWD")
+    # Check for path override first (highest priority)
+    # Overrides match against the current directory, not git root
+    override=$(_itint_find_override "$PWD")
 
-    if [ -n "$git_root" ]; then
-        # Inside a git repo - use git root for hashing
-        hash_path="$git_root"
+    if [ -n "$override" ]; then
+        # Parse override: hue|sat|light (sat/light may be empty)
+        local o_hue o_sat o_light
+        IFS='|' read -r o_hue o_sat o_light <<< "$override"
+
+        hue="$o_hue"
+        # Use override values if provided, otherwise use defaults
+        saturation="${o_sat:-${ITINT_DEFAULT_SATURATION:-50}}"
+        lightness="${o_light:-${ITINT_DEFAULT_LIGHTNESS:-50}}"
     else
-        # Not in git - use current directory
-        hash_path="$PWD"
+        # No override - determine path to hash
+        local hash_path
+        local git_root
+
+        git_root=$(_itint_find_git_root "$PWD")
+
+        if [ -n "$git_root" ]; then
+            # Inside a git repo - use git root for hashing
+            hash_path="$git_root"
+        else
+            # Not in git - use current directory
+            hash_path="$PWD"
+        fi
+
+        # Apply hash mode: folder_name_only uses just the folder name, not full path
+        if [ "$ITINT_HASH_MODE" = "folder_name_only" ]; then
+            hash_path="${hash_path##*/}"
+            # Handle edge case where path is "/" (results in empty string)
+            [ -z "$hash_path" ] && hash_path="/"
+        fi
+
+        # Generate hue from path
+        hue=$(_itint_path_to_hue "$hash_path")
+
+        # Validate hue output
+        if [ -z "$hue" ] || ! [ "$hue" -eq "$hue" ] 2>/dev/null; then
+            return 1
+        fi
+
+        # Use saturation and lightness from configuration
+        saturation="${ITINT_DEFAULT_SATURATION:-50}"
+        lightness="${ITINT_DEFAULT_LIGHTNESS:-50}"
     fi
-
-    # Apply hash mode: folder_name_only uses just the folder name, not full path
-    if [ "$ITINT_HASH_MODE" = "folder_name_only" ]; then
-        hash_path="${hash_path##*/}"
-        # Handle edge case where path is "/" (results in empty string)
-        [ -z "$hash_path" ] && hash_path="/"
-    fi
-
-    # Generate hue from path
-    local hue
-    hue=$(_itint_path_to_hue "$hash_path")
-
-    # Validate hue output
-    if [ -z "$hue" ] || ! [ "$hue" -eq "$hue" ] 2>/dev/null; then
-        return 1
-    fi
-
-    # Use saturation and lightness from configuration
-    local saturation="${ITINT_DEFAULT_SATURATION:-50}"
-    local lightness="${ITINT_DEFAULT_LIGHTNESS:-50}"
 
     # Convert to RGB
-    local rgb
+    local rgb r g b
     rgb=$(_itint_hsl_to_rgb "$hue" "$saturation" "$lightness")
 
     # Validate rgb output
@@ -344,9 +596,11 @@ _itint_update() {
         return 1
     fi
 
+    # Parse RGB values (explicitly set IFS for zsh compatibility)
+    IFS=' ' read -r r g b <<< "$rgb"
+
     # Set tab color (pass lightness for foreground contrast calculation)
-    # shellcheck disable=SC2086
-    _itint_set_tab_color $rgb "$lightness"
+    _itint_set_tab_color "$r" "$g" "$b" "$lightness"
 }
 
 # Bash-specific: wrapper for PROMPT_COMMAND that only updates on directory change

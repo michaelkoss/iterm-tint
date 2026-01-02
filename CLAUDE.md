@@ -11,6 +11,13 @@ Project learnings and patterns for LLM-assisted development.
 - **Always test in both bash and zsh** - The default shell on macOS is zsh, but the shebang says bash
 - **Use `$ZSH_VERSION` or `$BASH_VERSION`** to detect shell when behavior differs
 
+### Word Splitting (bash vs zsh)
+
+- **Zsh does not word-split by default** on unquoted parameter expansion (`$var`)
+- **Use `read` to split strings** into multiple variables instead of relying on `$var` word splitting
+- Example: `read a b c <<< "$space_separated"` works in both bash and zsh
+- **`set -- $var`** will NOT split in zsh unless `SH_WORD_SPLIT` is enabled
+
 ### DJB2 Hash
 
 - Initial value: 5381

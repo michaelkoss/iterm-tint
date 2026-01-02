@@ -1,6 +1,9 @@
 #!/bin/bash
 
 # Ralph Wiggum loop script - iteratively implements the website
+#
+# NOTE: This is a development-only script, not intended for end users.
+# Requires 'fs' (flowstate) to be installed and available in PATH.
 
 MAX_ITERATIONS=${1:-1}
 START_TIME=$(date +%s)
@@ -22,7 +25,7 @@ for ((i=1; i<=MAX_ITERATIONS; i++)); do
   echo "─────────────────────────────────────────────────────────"
 
   # Run claude with the prompt
-  claude -p --model opus --dangerously-skip-permissions "$(cat ralph-prompt.md)"
+  fs run ralph --name "ralph_$(date +%y%m%d%H%M%S)" --clean-on-end
 
   ITERATION_END=$(date +%s)
   ITERATION_DURATION=$((ITERATION_END - ITERATION_START))
