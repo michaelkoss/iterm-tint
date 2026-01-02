@@ -603,14 +603,6 @@ _itint_update() {
     _itint_set_tab_color "$r" "$g" "$b" "$lightness"
 }
 
-# Bash-specific: wrapper for PROMPT_COMMAND that only updates on directory change
-_itint_prompt_command() {
-    if [ "$PWD" != "$_ITINT_LAST_DIR" ]; then
-        _itint_update
-        _ITINT_LAST_DIR="$PWD"
-    fi
-}
-
 # Guard against duplicate sourcing
 if [ -z "$_ITINT_INITIALIZED" ]; then
     _ITINT_INITIALIZED=1
@@ -618,24 +610,56 @@ if [ -z "$_ITINT_INITIALIZED" ]; then
     # Load configuration from ~/.itint
     _itint_load_config
 
-    # Register shell hooks based on current shell
-    # Zsh: uses chpwd hook (fires on directory change)
-    # Bash: uses PROMPT_COMMAND (fires before each prompt, so we track last dir)
+    # Determine script directory for sourcing shell-specific hooks
+    # Uses shell-specific methods to correctly resolve the sourced script's location
     if [ -n "$ZSH_VERSION" ]; then
-        # Zsh - add to chpwd hook array (check for duplicates)
-        if [[ ! " ${chpwd_functions[*]} " =~ " _itint_update " ]]; then
-            chpwd_functions+=(_itint_update)
+        # Zsh: %N gives the name of the sourced file, :a makes it absolute, :h gets directory
+        # ${0:a:h} doesn't work when sourced (resolves to shell name), so we use %N
+        _ITINT_DIR="${${(%):-%N}:a:h}"
+    elif [ -n "$BASH_VERSION" ]; then
+        # Bash: resolve via dirname and cd/pwd for absolute path
+        _ITINT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    else
+        # Fallback for other shells (unlikely to work, but provides a path)
+        _ITINT_DIR="$(dirname "$0")"
+    fi
+
+    # Source shell-specific hook registration
+    # Zsh: uses chpwd hook (fires on directory change)
+    # Bash: uses PROMPT_COMMAND (fires before each prompt, tracks last dir)
+    # Falls back to inline hook registration if external files are missing (backward compatibility)
+    if [ -n "$ZSH_VERSION" ]; then
+        if [ -f "$_ITINT_DIR/shells/zsh.sh" ] && [ -r "$_ITINT_DIR/shells/zsh.sh" ]; then
+            source "$_ITINT_DIR/shells/zsh.sh"
+        else
+            echo "iterm-tint: warning: shells/zsh.sh not found at $_ITINT_DIR - reinstall may be required" >&2
+            # Inline fallback: register chpwd hook directly
+            if [[ ! " ${chpwd_functions[*]} " =~ " _itint_update " ]]; then
+                chpwd_functions+=(_itint_update)
+            fi
         fi
     elif [ -n "$BASH_VERSION" ]; then
-        # Bash - handle both string and array (bash 5+) PROMPT_COMMAND
-        if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" =~ "declare -a" ]]; then
-            # PROMPT_COMMAND is an array (bash 5+)
-            PROMPT_COMMAND=("_itint_prompt_command" "${PROMPT_COMMAND[@]}")
+        if [ -f "$_ITINT_DIR/shells/bash.sh" ] && [ -r "$_ITINT_DIR/shells/bash.sh" ]; then
+            source "$_ITINT_DIR/shells/bash.sh"
         else
-            # PROMPT_COMMAND is a string or unset
-            PROMPT_COMMAND="_itint_prompt_command${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+            echo "iterm-tint: warning: shells/bash.sh not found at $_ITINT_DIR - reinstall may be required" >&2
+            # Inline fallback: register PROMPT_COMMAND hook directly
+            _itint_prompt_command() {
+                if [ "$PWD" != "$_ITINT_LAST_DIR" ]; then
+                    _itint_update
+                    _ITINT_LAST_DIR="$PWD"
+                fi
+            }
+            if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" =~ "declare -a" ]]; then
+                PROMPT_COMMAND=("_itint_prompt_command" "${PROMPT_COMMAND[@]}")
+            else
+                PROMPT_COMMAND="_itint_prompt_command${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+            fi
         fi
     fi
+
+    # Clean up directory variable - no longer needed after sourcing
+    unset _ITINT_DIR
 
     # Set initial tab color for current directory on shell startup
     _itint_update
