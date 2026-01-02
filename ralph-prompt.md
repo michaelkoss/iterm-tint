@@ -20,10 +20,11 @@ Do NOT combine multiple features. One testable unit = one loop.
   - [docs/troubleshooting.md](docs/troubleshooting.md) - Common issues
 - **Git history** - Check commits to understand what's been built
 - **CLAUDE.md** - Project learnings and guidelines (if exists)
+- **Web search** - You may search the web for shell scripting patterns, iTerm2 escape sequences, or other technical references as needed
 
 ## Workflow
 1. **Read Docs** - Read ALL documentation to understand the complete vision
-2. **Check Progress** - Use `git log --oneline` to see what's been implemented
+2. **Check Progress** - Use `git log` to see what's been implemented (read full commit messages - important context is in descriptions)
 3. **Plan** - Identify the ONE smallest testable unit that logically comes next:
    - What does "done" look like? How will you test it?
    - Why is this the right next step?

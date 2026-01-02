@@ -22,7 +22,7 @@ for ((i=1; i<=MAX_ITERATIONS; i++)); do
   echo "─────────────────────────────────────────────────────────"
 
   # Run claude with the prompt
-  claude --model opus --dangerously-skip-permissions "$(cat ralph-prompt.md)"
+  claude -p --model opus --dangerously-skip-permissions "$(cat ralph-prompt.md)"
 
   ITERATION_END=$(date +%s)
   ITERATION_DURATION=$((ITERATION_END - ITERATION_START))
