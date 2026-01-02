@@ -113,3 +113,45 @@ _itint_set_tab_color() {
     printf '\033]6;1;bg;green;brightness;%d\a' "$g"
     printf '\033]6;1;bg;blue;brightness;%d\a' "$b"
 }
+
+# Find git root directory by searching upward
+# Input: starting directory path
+# Output: git root path (empty string if not in a git repo)
+# Stops at ~ or / to prevent runaway searches
+_itint_find_git_root() {
+    local dir="$1"
+    local home_dir="$HOME"
+
+    # Traverse upward until we find .git or hit boundaries
+    while [ -n "$dir" ] && [ "$dir" != "/" ]; do
+        # Check for .git in current directory
+        if [ -e "$dir/.git" ]; then
+            # Found something - is it a directory (regular repo) or file (submodule)?
+            if [ -d "$dir/.git" ]; then
+                # Regular git repository
+                echo "$dir"
+                return 0
+            else
+                # .git is a file - this is a submodule
+                # For now, treat it as the git root (ITINT_SUBMODULE_MODE=unique behavior)
+                # TODO: Add ITINT_SUBMODULE_MODE=parent support to continue upward
+                echo "$dir"
+                return 0
+            fi
+        fi
+
+        # Stop at home directory boundary
+        if [ "$dir" = "$home_dir" ]; then
+            break
+        fi
+
+        # Move up one directory
+        dir="${dir%/*}"
+        # Handle root case (dir becomes empty when at /)
+        [ -z "$dir" ] && dir="/"
+    done
+
+    # Not in a git repository
+    echo ""
+    return 1
+}
