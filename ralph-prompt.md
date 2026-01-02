@@ -27,9 +27,15 @@ Do NOT combine multiple features. One testable unit = one loop.
 - **Web search** - You may search the web for shell scripting patterns, iTerm2 escape sequences, or other technical references as needed
 
 ## Workflow
+
+0. **Check for User-Defined Tasks** - Check if `todo.md` exists in the project root:
+   - If it exists, read it and look for unchecked tasks (`- [ ]`)
+   - Select ONE unchecked task to work on this loop (prefer earlier items)
+   - If no `todo.md` or no unchecked tasks, proceed to determine your own task in Step 3
+   - **User-defined tasks take precedence over self-determined work**
 1. **Read Docs** - Read ALL documentation to understand the complete vision
 2. **Check Progress** - Use `git log` to see what's been implemented (read full commit messages - important context is in descriptions)
-3. **Plan** - Identify the ONE smallest testable unit that logically comes next:
+3. **Plan** - If no task from todo.md, identify the ONE smallest testable unit that logically comes next:
    - What does "done" look like? How will you test it?
    - **Is this on the critical path to MVP?** (If not, deprioritize it)
    - What's blocking the user from testing this in their actual iTerm?
@@ -40,6 +46,7 @@ Do NOT combine multiple features. One testable unit = one loop.
 8. **Commit** - `git add -A && git commit`:
    - Format: `type: short description` (feat/fix/refactor/docs)
    - Body: describe what and why
+9. **Mark Task Complete** - If you worked on a task from todo.md, mark it done by changing `- [ ]` to `- [x]` and commit the update
 
 ## Learnings & Guidance
 <!-- LLM: Add learnings here as you discover them. Not a changelog - only patterns, gotchas, and decisions that help future loops. -->
