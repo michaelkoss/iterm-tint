@@ -98,3 +98,18 @@ _itint_hsl_to_rgb() {
 
     echo "$r $g $b"
 }
+
+# Set iTerm2 tab color using escape codes
+# Input: R G B (0-255 each)
+# Only outputs escape codes if running in iTerm2
+_itint_set_tab_color() {
+    local r="$1" g="$2" b="$3"
+
+    # Silently do nothing if not in iTerm2
+    [ "$TERM_PROGRAM" != "iTerm.app" ] && return 0
+
+    # Set background color (one escape per channel)
+    printf '\033]6;1;bg;red;brightness;%d\a' "$r"
+    printf '\033]6;1;bg;green;brightness;%d\a' "$g"
+    printf '\033]6;1;bg;blue;brightness;%d\a' "$b"
+}
