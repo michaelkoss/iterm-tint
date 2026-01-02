@@ -24,3 +24,14 @@ Project learnings and patterns for LLM-assisted development.
 - Formula: `hash = ((hash << 5) + hash) + byte`
 - Must mask with `0x7FFFFFFF` to prevent overflow in shell arithmetic
 - `printf '%d' "'$char"` gives ASCII value of a character
+
+### Fish Shell Specifics
+
+- **Use `test` instead of `[ ]`** - Fish uses `test` command for conditionals
+- **Event hooks via `--on-variable`** - Fish function declarations can include `--on-variable PWD` to trigger on directory changes
+- **Array indexing is 1-based** - Fish arrays start at index 1, unlike bash (0-based)
+- **Use `string` builtin for manipulation** - Fish has `string split`, `string match`, `string replace` instead of bash parameter expansion
+- **`set -q VAR`** checks if variable is defined
+- **`set -g VAR value`** sets global variable
+- **`isatty stdout`** checks if stdout is a TTY (vs `[ -t 1 ]` in bash)
+- **No `exit` inside functions** - Use `return` to exit functions early
