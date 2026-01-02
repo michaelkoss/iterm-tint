@@ -105,8 +105,9 @@ _itint_hsl_to_rgb() {
 _itint_set_tab_color() {
     local r="$1" g="$2" b="$3"
 
-    # Silently do nothing if not in iTerm2
+    # Silently do nothing if not in iTerm2 or not a TTY
     [ "$TERM_PROGRAM" != "iTerm.app" ] && return 0
+    [ ! -t 1 ] && return 0
 
     # Set background color (one escape per channel)
     printf '\033]6;1;bg;red;brightness;%d\a' "$r"
@@ -121,9 +122,11 @@ _itint_set_tab_color() {
 _itint_find_git_root() {
     local dir="$1"
     local home_dir="$HOME"
+    local prev_dir=""
 
     # Traverse upward until we find .git or hit boundaries
-    while [ -n "$dir" ] && [ "$dir" != "/" ]; do
+    while [ -n "$dir" ] && [ "$dir" != "/" ] && [ "$dir" != "$prev_dir" ]; do
+        prev_dir="$dir"
         # Check for .git in current directory
         if [ -e "$dir/.git" ]; then
             # Found something - is it a directory (regular repo) or file (submodule)?
@@ -177,6 +180,11 @@ _itint_update() {
     local hue
     hue=$(_itint_path_to_hue "$hash_path")
 
+    # Validate hue output
+    if [ -z "$hue" ] || ! [ "$hue" -eq "$hue" ] 2>/dev/null; then
+        return 1
+    fi
+
     # Use default saturation and lightness (config parsing comes later)
     local saturation=50
     local lightness=50
@@ -184,6 +192,11 @@ _itint_update() {
     # Convert to RGB
     local rgb
     rgb=$(_itint_hsl_to_rgb "$hue" "$saturation" "$lightness")
+
+    # Validate rgb output
+    if [ -z "$rgb" ]; then
+        return 1
+    fi
 
     # Set tab color
     # shellcheck disable=SC2086
@@ -198,17 +211,32 @@ _itint_prompt_command() {
     fi
 }
 
-# Register shell hooks based on current shell
-# Zsh: uses chpwd hook (fires on directory change)
-# Bash: uses PROMPT_COMMAND (fires before each prompt, so we track last dir)
-if [ -n "$ZSH_VERSION" ]; then
-    # Zsh - add to chpwd hook array
-    chpwd_functions+=(_itint_update)
-elif [ -n "$BASH_VERSION" ]; then
-    # Bash - prepend to PROMPT_COMMAND, preserving existing commands
-    PROMPT_COMMAND="_itint_prompt_command${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
-    _ITINT_LAST_DIR=""
-fi
+# Guard against duplicate sourcing
+if [ -z "$_ITINT_INITIALIZED" ]; then
+    _ITINT_INITIALIZED=1
 
-# Set initial tab color for current directory on shell startup
-_itint_update
+    # Register shell hooks based on current shell
+    # Zsh: uses chpwd hook (fires on directory change)
+    # Bash: uses PROMPT_COMMAND (fires before each prompt, so we track last dir)
+    if [ -n "$ZSH_VERSION" ]; then
+        # Zsh - add to chpwd hook array (check for duplicates)
+        if [[ ! " ${chpwd_functions[*]} " =~ " _itint_update " ]]; then
+            chpwd_functions+=(_itint_update)
+        fi
+    elif [ -n "$BASH_VERSION" ]; then
+        # Bash - handle both string and array (bash 5+) PROMPT_COMMAND
+        if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" =~ "declare -a" ]]; then
+            # PROMPT_COMMAND is an array (bash 5+)
+            PROMPT_COMMAND=("_itint_prompt_command" "${PROMPT_COMMAND[@]}")
+        else
+            # PROMPT_COMMAND is a string or unset
+            PROMPT_COMMAND="_itint_prompt_command${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+        fi
+    fi
+
+    # Set initial tab color for current directory on shell startup
+    _itint_update
+
+    # Initialize last dir to prevent redundant update on first prompt
+    _ITINT_LAST_DIR="$PWD"
+fi
