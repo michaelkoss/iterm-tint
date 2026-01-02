@@ -35,3 +35,12 @@ Project learnings and patterns for LLM-assisted development.
 - **`set -g VAR value`** sets global variable
 - **`isatty stdout`** checks if stdout is a TTY (vs `[ -t 1 ]` in bash)
 - **No `exit` inside functions** - Use `return` to exit functions early
+
+### POSIX Shell Installer Scripts
+
+- **Use `#!/bin/sh`** for maximum portability when script will be piped via curl
+- **`local` keyword works in sh** despite not being POSIX - works in dash, bash, zsh
+- **Use `printf` over `echo`** for escape sequences (colors) - more portable
+- **Test for TTY with `[ -t 1 ]`** before outputting colors
+- **Use `command -v foo`** instead of `which foo` - POSIX compliant
+- **`set -e`** for fail-fast behavior in installers
